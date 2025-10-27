@@ -295,7 +295,7 @@ at,解像度
  arcmin resolution., 分。
 Study extent buffered by,バッファ後の分析範囲（バッファサイズ
 degrees.,度）。
-Random background points sampled (n =,ランダムにサンプリングされた背景地点（n =
+"Random background points sampled (n =",ランダムにサンプリングされた背景地点（n =
 ).,)。
 "), but only ",）、 しかし
 % of points (n = ,% のポイント (n =
@@ -325,3 +325,20 @@ Projected to,投影対象：
 Using map center,Using map center:
 Removing occurrences with occID = ,削除された在データの occID = 
 Module: Project to User-Specified Environments,モジュール: ユーザー指定の環境データへ投影
+Geodesic buffer for unprojected points,背景加重法(background thickening)での背景地点サンプリング
+Calculate geodesic buffer with a constant distance,一定距離で測地線バッファを計算する
+Point geodesic buffer in km,キロメートル単位での測地線バッファ距離の指定
+"Upload background points with field order: longitude, latitude (.csv)","背景点（longitude,latitude）をCSVファイルでアップロードする"
+Target group background,対象群背景法（Target group background）
+Envs Mask,ランダムサンプリング
+Module: Geodesic buffer for unprojected points,モジュール: 背景加重法(background thickening)
+Background thickening: Geodesic buffer,背景加重法（Background thickening)
+"Background points uploaded (n =",背景点がアップロードされました。(n = 
+"Target group background points requested (n =",ターゲットグループの背景点が要求されました。(n =
+"Target group background points sampled (n =",ターゲットグループの背景点がランダムに取得されました。(n = 
+"Calculating Geobuffer points ...",ジオバッファー点群の計算...
+"Geodesic buffer for species calculated.",種に対して測地線バッファが計算された。バッファサイズ 
+"Random background points requested (n =",背景点のランダムサンプリングが要求されました（n =
+"km.",キロメートル。
+"Upload background points (.csv)",背景点(.csv)をアップロード
+"Background points files not uploaded.",背景点ファイルがアップロードされなかった

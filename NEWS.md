@@ -1,3 +1,21 @@
+# wallaceJP 1.1.3-1.3
+
+- The Japanese version includes a specialized function designed to correct sampling biases in biological distribution surveys.
+
+- Updated package to use terra,sf and predicts functions instead of raster and dismo, which rely on deprecated pkgs sp, rgdal, and rgeos. 
+
+- updated for ENMeval v2.0.5 functionality
+
+- Download Worldclim and CMIP6 data
+
+# wallaceJP 1.1.3-1.2
+
+- Target Group Gackground for japan gbif
+
+# wallaceJP 1.1.3-1.1
+
+- Download Worldclim and CMIP5 data
+
 # wallaceJP 1.1.3-1
 
 - interface translated into Japanese, 30-arcsec climate data available for future projection, and users can upload user-defined environmental data for future projection

@@ -184,7 +184,7 @@ popUpContent <- function(x) {
 
 remEnvsValsNA <- function(rvs) {
   withProgress(message = i18n$t("Checking for points with NA values..."), {
-    occsVals <- raster::extract(rvs$envs, rvs$occs[c('longitude', 'latitude')])
+    occsVals <- terra::extract(rvs$envs, rvs$occs[c('longitude', 'latitude')])
     na.rowNums <- which(rowSums(is.na(occsVals)) > 1)
     
     if (length(na.rowNums) == length(occsVals)) {
@@ -208,12 +208,29 @@ remEnvsValsNA <- function(rvs) {
 ####################### #
 
 # make a minimum convex polygon as SpatialPolygons object
+# mcp <- function(xy) {
+#   xy <- as.data.frame(sp::coordinates(xy))
+#   coords.t <- chull(xy[, 1], xy[, 2])
+#   xy.bord <- xy[coords.t, ]
+#   xy.bord <- rbind(xy.bord[nrow(xy.bord), ], xy.bord)
+#   return(sp::SpatialPolygons(list(sp::Polygons(list(sp::Polygon(as.matrix(xy.bord))), 1))))
+# }
 mcp <- function(xy) {
-  xy <- as.data.frame(sp::coordinates(xy))
+  #browser()
+  xy <- sf::st_coordinates(sf::st_as_sf(xy, coords = c("longitude", "latitude"), crs = 4326))
   coords.t <- chull(xy[, 1], xy[, 2])
   xy.bord <- xy[coords.t, ]
   xy.bord <- rbind(xy.bord[nrow(xy.bord), ], xy.bord)
-  return(sp::SpatialPolygons(list(sp::Polygons(list(sp::Polygon(as.matrix(xy.bord))), 1))))
+
+  return(sf::st_sfc(sf::st_polygon(list(xy.bord)), crs = 4326))
+}
+# mapping bgPts
+map_plotbgPts <- function(map, bg.xy, fillColor='blue', fillOpacity=0.2) {
+  if (is.null(bg.xy)) return(map)
+  map %>% addCircleMarkers(data = bg.xy, lat = ~latitude, lng = ~longitude,
+                           radius = 5, color = 'blue', fill = TRUE,
+                           fillColor = fillColor, fillOpacity = fillOpacity,
+                           weight = 2)
 }
 
 ####################### #
@@ -228,7 +245,7 @@ comp5_map <- function(map, occs, occsGrp) {
   map %>%
     clearMarkers() %>%
     map_plotLocs(occs, fillColor = partsFill, fillOpacity = 1) %>%
-    addLegend("bottomright", colors = newColors,
+    leaflet::addLegend("bottomright", colors = newColors,
               title = "Partition Groups", labels = sort(unique(occsGrp)),
               opacity = 1, layerId = 'leg')
 }
@@ -260,15 +277,28 @@ thresh <- function(modOccVals, type) {
 
 predictMaxnet <- function(mod, envs, clamp, type) {
   requireNamespace("maxnet", quietly = TRUE)
-  envs.n <- raster::nlayers(envs)
-  envs.pts <- raster::getValues(envs) %>% as.data.frame()
-  mxnet.p <- predict(mod, envs.pts, type = type,
-                     clamp = clamp)
-  envs.pts[as.numeric(row.names(mxnet.p)), "pred"] <- mxnet.p
-  pred <- raster::rasterFromXYZ(cbind(raster::coordinates(envs),
-                                      envs.pts$pred),
-                                res = raster::res(envs),
-                                crs = raster::crs(envs))
+  # envs.n <- raster::nlayers(envs)
+  # envs.pts <- raster::getValues(envs) %>% as.data.frame()
+  envs.n <- terra::nlyr(envs)
+  envs.pts <- terra::values(envs) %>% as.data.frame()
+  # mxnet.p <- predict(mod, envs.pts, type = type,
+  #                    clamp = clamp)
+  # envs.pts[as.numeric(row.names(mxnet.p)), "pred"] <- mxnet.p
+  # pred <- raster::rasterFromXYZ(cbind(raster::coordinates(envs),
+  #                                     envs.pts$pred),
+  #                               res = raster::res(envs),
+  #                               crs = raster::crs(envs))
+  #browser()
+  mxnet.p <- predicts::predict(envs, mod, type = type,
+                               clamp = clamp, na.rm=TRUE)
+  # envs.pts$pred <- NA
+  # envs.pts[as.numeric(rownames(mxnet.p)), "pred"] <- mxnet.p
+  # coords <- terra::xyFromCell(envs, 1:nrow(envs.pts))
+  # pred <- terra::rast(cbind(coords, envs.pts$pred), type = "xyz",
+  #                     crs = terra::crs(envs))
+  # terra::res(pred) <- terra::res(envs)
+  # browser()
+  pred <- mxnet.p
   return(pred)
 }
 
@@ -292,7 +322,8 @@ bc.plot <- function(x, a=1, b=2, p=0.9, ...) {
   p <- min(1,  max(0, p))
   if (p > 0.5) p <- 1 - p
   p <- p / 2
-  prd <- dismo::predict(x, d, useC = FALSE)
+  #prd <- dismo::predict(x, d, useC = FALSE)
+  prd <- predicts::predict(x, d)
   i <- prd > p & prd < (1-p)
   plot(d[,a], d[,b], xlab=colnames(d)[a], ylab=colnames(d)[b], cex=0)
   type=6
@@ -321,6 +352,7 @@ lambdasDF <- function(mx, alg) {
 }
 ## pulls out all non-zero, non-redundant (removes hinge/product/threshold) predictor names
 mxNonzeroCoefs <- function(mx, alg) {
+  #browser()
   if (alg == "maxent.jar") {
     x <- lambdasDF(mx, alg)
     #remove any rows that have a zero lambdas value (Second column)
@@ -360,7 +392,7 @@ respCurv <- function(mod, i) {  # copied mostly from dismo
   mm <- v[rep(1:v.nr, xlm), ]
   mm[, i] <- rep(vi.rx, v.nr)
   mm[, -i] <- rep(colMeans(mm[,-i]), each=nrow(mm))
-  p <- predict(mod, mm)
+  p <- predicts::predict(mod, mm)
   plot(cbind(vi.rx, p[1:xlm]), type='l', ylim=0:1, col = 'red', lwd = 2,
        ylab = 'predicted value', xlab = names(v)[i])
   pres.r <- range(mod@presence[, i])
@@ -373,7 +405,7 @@ respCurv <- function(mod, i) {  # copied mostly from dismo
 }
 
 getVals <- function(r, type='raw') {
-  v <- raster::values(r)
+  v <- terra::values(r)
   # remove NAs
   v <- v[!is.na(v)]
   if (type == 'logistic' | type == 'cloglog') v <- c(v, 0, 1)  # set to 0-1 scale
@@ -406,13 +438,13 @@ comp8_map <- function(map, ras, polyXY, bgShpXY, rasVals, rasCols,
   # if thresholded, plot with two colors
   if (grepl('thresh', names(ras))) {
     rasPal <- c('gray', 'blue')
-    map %>% addLegend("bottomright", colors = c('gray', 'blue'),
+    map %>% leaflet::addLegend("bottomright", colors = c('gray', 'blue'),
                       title = "Thresholded Suitability", labels = c("predicted absence", "predicted presence"),
                       opacity = 1, layerId = 'leg')
   } else {
     rasPal <- colorNumeric(rasCols, rasVals, na.color='transparent')
     legPal <- colorNumeric(rev(rasCols), rasVals, na.color='transparent')
-    map %>% addLegend("bottomright", pal = legPal, title = legTitle,
+    map %>% leaflet::addLegend("bottomright", pal = legPal, title = legTitle,
                       values = rasVals, layerId = 'leg',
                       labFormat = reverseLabels(2, reverse_order=TRUE))
   }
@@ -478,4 +510,71 @@ convert_list_cols <- function(x) {
 
 write_csv_robust <- function(x, ...) {
   write.csv(convert_list_cols(x), ...)
+}
+
+#' @title penvs_geodesic Geodesic buffer for unprojected points
+#' @description This function helps in creating geodesic buffers of points represented by longitude and latitude coordinates.
+#'
+#' @details
+#' x
+#'
+#' @param occs data frame of cleaned or processed occurrences obtained from components occs: Obtain occurrence data or, poccs: Process occurrence data
+#' @param geodBuf numeric. Radius of buffer in meters
+# @param by_point logical. Whether or not to do buffers by point. If FALSE, the default, buffer polygons that overlap will be dissolved to obtain an only feature. Default = 100.
+# @param wrap_antimeridian logical. Whether or not to wrap buffers in the antimeridian when they overpass it.
+#' @param logger  Stores all notification messages to be displayed in the Log Window of Wallace GUI. Insert the logger reactive list here for running in shiny,
+#' otherwise leave the default NULL
+#' @param spN data frame of cleaned occurrences obtained from component occs: Obtain occurrence data. Used to obtain species name for logger messages
+# @keywords
+#'
+#' @examples
+#' spN<-"Panthera onca"
+#' occs <-  occs_queryDb(spName = spN, occDb = "gbif", occNum = 100)
+#' occs <- as.data.frame(occs[[1]]$cleaned)
+#' envs <- envs_worldclim(bcRes = 10, bcSel = list(TRUE,TRUE,TRUE,TRUE,TRUE), doBrick = TRUE)
+#' bgExt <- penvs_bgExtent(occs, bgSel = 'bounding box', bgBuf = 0.5,spN=spN)
+#' bgMask <- penvs_bgMask(occs, envs, bgExt,spN=spN)
+#' bgsample <- penvs_bgSample(occs, bgMask, bgPtsNum=1000,spN=spN)
+#'
+#' @return A SpatialPolygons object of buffered points. Final projection is WGS84 (EPSG:4326).
+#' @author Name <e-mail>
+#' @author Name <e-mail>
+# @note
+#' @seealso \code{\link{penvs_bgMask}} , \code{\link{penvs_bgExtent}}  \code{\link{penvs_userBgExtent}}, \code{\link{penvs_drawBgExtent}}, \code{\link[dismo]{randomPoints}}
+# @references
+# @aliases - a list of additional topic names that will be mapped to
+# this documentation when the user looks them up from the command
+# line.
+# @family - a family name. All functions that have the same family tag will be linked in the documentation.
+
+#' @export
+
+penvs_geodesic <- function(occs, geodBuf, logger = logger, spN = sp) {
+  # Warnings
+  # input
+  occs.xy <- occs[c('longitude', 'latitude')]
+  # sp::coordinates(occs.xy) <- ~ longitude + latitude
+  # occs.sp <- sp::SpatialPointsDataFrame(occs.xy, data = occs['occID'])
+  
+  occs.sp <- sf::st_as_sf(occs.xy, coords = c("longitude", "latitude"), crs = 4326)
+  occs.sp <- sf::as_Spatial(occs.sp)
+  # occs.sp@data <- occs['occID']
+
+  # ### run modified rangemap function (from stack exchange)
+  # withProgress(message = i18n$t("Calculating Geobuffer points ..."),{
+  #   gbuf.laea <- geobuffer_points(data = occs.sp@coords, radius = geodBuf*1000, n_segments = 100, by_point = TRUE)
+  # })
+  withProgress(message = i18n$t("Calculating Geobuffer points ..."),{
+    # EPSG:32652 = UTM zone 52N / JGD2000 / UTM zone 54N - EPSG:3100
+    occs.sf <- sf::st_transform(sf::st_as_sf(occs.sp), crs = 3100)
+    gbuf.laea <- sf::st_buffer(occs.sf, dist = geodBuf*1000 ) %>%
+      sf::st_sf() %>%
+      sf::st_transform(crs = 4326) %>%
+      sf::as_Spatial()
+  })
+  # output model object
+  return(gbuf.laea)
+  # write log message
+  logger%>% writeLog(i18n$t("Geobuffer points calculated successfully for "), (spName(spN)), ".")
+
 }
